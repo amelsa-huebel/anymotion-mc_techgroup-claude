@@ -1,0 +1,20 @@
+# .claude/.gitignore — what stays per-developer vs. what gets shared
+#
+# Everything not listed here is tracked by default (matching endriss's pattern).
+
+# Per-developer Claude Code settings (permissions, allowed tools, model overrides).
+# This is the conventional Claude Code location for personal config — never share.
+settings.local.json
+
+# Raw session-learning journal — captured by /learnsave before review.
+# Curated output (distilled/) and audit trail (archived/) ARE tracked, so the team
+# still benefits from /formulate-beliefs once raw notes are reviewed and integrated.
+# To share an unsorted learning, run /formulate-beliefs to promote it to distilled/.
+.memories/unsorted/*
+!.memories/unsorted/.gitkeep
+
+# Anything matching this glob is per-developer scratch (e.g. when experimenting
+# with hookify rules locally without committing them yet). Hookify rules meant
+# to be shared use the *.local.md naming convention without a leading underscore.
+_scratch/
+*.scratch.md
