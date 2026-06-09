@@ -2,6 +2,30 @@
 
 Project-scoped Claude Code configuration for the **M&C TechGroup Pimcore 11** project.
 
+> ## ⚠️ Important: the root `CLAUDE.md` is a **symlink**, not a copy
+>
+> The real, version-tracked file lives at **`.claude/CLAUDE.md`**. The repo root
+> `./CLAUDE.md` is a **relative symlink** to it, so Claude Code still auto-loads it from
+> the root while everything Claude-related stays under `.claude/` for tracking.
+>
+> **Always edit `.claude/CLAUDE.md`** (editing the root symlink edits the same file — that's
+> fine — but never replace the symlink with a hard copy or a second duplicate; two diverging
+> copies is exactly what this avoids).
+>
+> If you clone the repo and the root link is missing (or got replaced by a copy), recreate it
+> from the repo root:
+>
+> ```bash
+> # from the repository root:
+> rm -f CLAUDE.md                  # only if a stray copy exists
+> ln -s .claude/CLAUDE.md CLAUDE.md
+> # verify it resolves:
+> readlink CLAUDE.md               # -> .claude/CLAUDE.md
+> ```
+>
+> Use a **relative** target (`.claude/CLAUDE.md`), not an absolute `/home/...` path — git
+> stores the symlink as that path text, so a relative target stays valid in every clone.
+
 Modeled after the `endriss` `.claude/` setup but rewritten for this stack:
 
 | Layer            | endriss (Pimcore 11 + CoreShop + Vue 3) | mc-techgroup (here)                                          |
@@ -21,6 +45,7 @@ Modeled after the `endriss` `.claude/` setup but rewritten for this stack:
 
 ```
 .claude/
+├── CLAUDE.md             the real project CLAUDE.md (root ./CLAUDE.md is a symlink → here)
 ├── agents/               9 specialist agents (project-local)
 ├── commands/             /learnsave + /formulate-beliefs project versions
 ├── skills/               enforce-guidelines, save-session-learnings, formulate-beliefs
