@@ -18,3 +18,21 @@ settings.local.json
 # to be shared use the *.local.md naming convention without a leading underscore.
 _scratch/
 *.scratch.md
+
+# --- Per-machine agent identity. NEVER share. (added 2026-08-18) ---
+# bus-config.json declares this agent's identity on the AI bus via session_name,
+# which decides BOTH what it stamps on outgoing envelopes AND which inbox it polls.
+# Claiming an envelope is a move, not a read — so a copied config makes one agent
+# silently consume another's work in the wrong codebase. /Sites/akne declared itself
+# "rosacea-galderma-1" from the June 2026 bootstrap until 2026-08-18 for exactly this
+# reason. Keep it ignored so the collision can never propagate through git.
+bus-config.json
+
+# Compaction checkpoint — per-session, per-worktree by design.
+session-state.json
+
+# Local scratch and edit backups
+_scratch/
+*.scratch.md
+*.bak
+*.bak-*

@@ -1,0 +1,78 @@
+{
+  "schema_version": "1",
+  "report_file": "/home/andreasmh/Sites/mc-techgroup-pim11/.claude/qa/reports/2026-08-04_MCTBE-704_flat-memory-export.md",
+  "verified_at": "2026-08-04T19:20:00+02:00",
+  "revised_at": "2026-08-04T19:45:00+02:00",
+  "revision_note": "SUPERSEDES the first pass of this verdict, which returned FAIL on a CRITICAL compliance finding that was WRONG. That pass flagged 3 commits (cda62ff4d, 9e4be38b0, 9c9342e82) as violating the dispatch brief's 'DO NOT commit' hard constraint. The commits are real, but they were EXPLICITLY AUTHORIZED by the operator in-session ('Please commit on feature branch per step/task.'), which overrode the brief. The worker complied correctly (feature branch, never main; three per-step commits, each verified green at 35/85 -> 38/96 -> 41/110) and disclosed the override rather than hiding it. Root cause of the bad finding is hub-side: the verifier was given the DISPATCH brief as the compliance baseline without being told the operator had since amended it, so it audited against a stale contract. Lesson: hub verification must use the CURRENT contract, not the dispatch contract. Operator sign-off on all three gates obtained 2026-08-04.",
+
+  "done_ness": {
+    "verdict": "COMPLETE",
+    "ac_met": 6,
+    "ac_partial": 0,
+    "ac_unmet": 0,
+    "deliverables_delivered": 6,
+    "deliverables_missing": 0,
+    "notes": "Chunked ID-list walk, per-chunk release, onProgress contract, skip-without-abort, and countRows() semantics are all implemented and independently confirmed against the diff and both callers. On the memory criterion: the brief's literal wording ('flat and independent of total row count') is NOT met — a residual ~24 KB/row linear growth remains, down from ~119 KB/row (~4.6x reduction). That literal wording was hub-side overreach, which the worker corrected honestly (including retracting its own earlier, wrong 'row-count independent' claim and the wrong thumbnail attribution). Judged against the ticket's actual purpose — export the full live catalogue inside PHP's 512M limit — the criterion IS met with ~4x headroom: 2245 rows peak at 123 MB, and the 1912-row live catalogue projects to ~121 MB. The residual only becomes a limit problem around 15-18k products (~8x the current catalogue) and is tracked as Step 5 (TheLink task fd7406e4) rather than fixed here. Operator accepted this bar explicitly. The addSkippedWarning() public-API addition is a documented, argued-unavoidable deviation (addWarning() is private; buildRow() is the only public entry point) — recorded under compliance, not as a missing deliverable."
+  },
+
+  "runnability": {
+    "verdict": "RUNNABLE",
+    "verification_passed": 7,
+    "verification_failed": 0,
+    "test_suite_passed": true,
+    "build_ok": true,
+    "dependency_audit": {
+      "available": false,
+      "gate_failed": false,
+      "php_advisories": 0,
+      "js_vulnerabilities": 0,
+      "new_high_critical_from_this_change": [],
+      "top_advisories": []
+    },
+    "notes": "Independently re-ran everything rather than reading the report: unit suite via `./any exec pimcore php vendor/bin/phpunit -c tests/phpunit/phpunit.xml.dist --testsuite unit` -> 41 tests / 110 assertions PASS, 1 pre-existing risky test (kernel error-handler leak, unrelated) — matches the report exactly. Integration `RunProductExportHandlerTest.php` -> 2 tests / 30 assertions PASS, 1 pre-existing risky — matches. Re-ran the CLI export myself: 938 rows, 145 field warnings (url:21, image:41, title:4, description:79) — identical breakdown; md5sum of the produced CSV = 716853af89c38f6d65586c498507fcff, byte-identical to the claimed hash. Draft/published split independently counted: 95 ';draft;' + 843 ';published;' = 938 — this was the highest-risk regression flagged at dispatch and it is confirmed safe at runtime, non-vacuously (the dev catalogue genuinely holds 95 drafts). Both callers confirmed to still satisfy the onProgress contract by reading their source. php-cs-fixer run manually (the `any csf` pinned image is genuinely broken — 'input device is not a TTY' reproduced): only 1 pre-existing violation in createWriter(), absent from this diff. No dependency audit requested and composer.lock unmodified, so not applicable rather than a gap."
+  },
+
+  "compliance": {
+    "verdict": "DEVIATIONS",
+    "deviations_minor": 2,
+    "deviations_major": 1,
+    "deviations_critical": 0,
+    "unexpected_files": 0,
+    "missing_planned_files": 0,
+    "notes": "VOIDED (was CRITICAL): the 3 commits on bugfix/MCTBE-704-extend-worker-memory are operator-authorized ('Please commit on feature branch per step/task.'), landed on a feature branch and never on main, each verified green, and the worker disclosed the override explicitly on TheLink and in this report's git line. Not a breach. MAJOR (operator-approved to keep): the warning-cap 'truncated' fix plus its consequential Twig template change — outside this ticket's ask and outside the operator's 'one bad product must not harm the run' authorization, but it fixes a real pre-existing live bug (a 2245-row run produces 2308 warnings against a 2000-message cap, so the job row claimed 2308 while listing 2000 with nothing signalling truncation) and is verified end-to-end (1999 messages + 1 truncation notice = 2000; 1999 + 309 = 2308). Operator elected to keep it in this ticket. MINOR: public addSkippedWarning() on ProductExportRowBuilder (brief preferred no public-API change; documented as unavoidable). MINOR: MAX_CONSECUTIVE_ERRORS=100 abort guard — a new failure mode, not explicitly requested, but the operator directly authorized error hardening and the guard counts CONSECUTIVE failures so 'one bad product never harms the run' holds by construction; transparently flagged for sign-off. All 6 excluded files confirmed untouched (they carry pre-existing unrelated dirty/untracked state). composer.json/composer.lock genuinely unmodified. declare(strict_types=1) present in all new/changed PHP."
+  },
+
+  "overall": {
+    "verdict": "PASS_WITH_NOTES",
+    "summary": "Verified, reproducible, and honestly reported. The chunked ID-list walk is real and independently confirmed: 41/110 unit and 2/30 integration PASS on re-run, output byte-identical to baseline (md5 716853af89c38f6d65586c498507fcff, 938 rows, 145 warnings), and the highest-risk regression — unpublished products still exporting as 'draft' — confirmed at runtime as 95 draft + 843 published = 938. Peak memory improves ~4.6x (938 rows: ~97 MB vs ~173 MB with release disabled), putting the 1912-row live catalogue near 121 MB against a 512 MB limit. The ticket's literal 'flat memory' wording is not met (~24 KB/row residual remains) but that wording was hub-side overreach; the worker retracted its own earlier overstatement rather than defending it, and the operator accepted the 4.6x bar with Step 5 tracked as follow-up. Two scope additions beyond the brief were disclosed, not hidden, and the operator elected to keep them. Remaining gate is process, not code: the work sits in 3 local commits on a feature branch and must reach main via a GitLab MR — the hub never triggers the merge.",
+    "action_items": [
+      "[blocking_before_merge] Push bugfix/MCTBE-704-extend-worker-memory and open a GitLab MR into main. This is a client repo (gitlab.anymotion.de:m-c-techgroup/pimcore) — never merge to main directly, and the hub never triggers the merge.",
+      "[blocking_before_merge] After deploy, re-run the export on LIVE at the full 1912-row scope and confirm it completes. Nothing has been exercised on the K8s two-node setup where the original failure was reported; local verification maxed at 2245 rows.",
+      "[follow_up] Step 5 (TheLink task fd7406e4): attribute and fix the residual ~24 KB/row growth — prime suspect ProductLinkGenerator/AbstractLinkGenerator/router per the worker's own elimination work. Only bites around 15-18k products.",
+      "[follow_up] Step 6 (TheLink task 6a650e14): document the thumbnail memory cost as a constant ~16-20 MB transient on a cold thumbnail cache, not an accumulation.",
+      "[follow_up] Fix the `any cs`/`any csf` wrapper — pinned image cytopia/php-cs-fixer:3-php8.3 no longer resolves upstream and the wrapper passes --tty with no pty. Both failures independently reproduced. Own ticket.",
+      "[follow_up] MAX_CONSECUTIVE_ERRORS=100 is unit-tested at the boundary only, never against a real DB/S3/router outage — consider a staging drill before relying on it.",
+      "[follow_up] XLSX format and non-`en` locales are unexercised by any verification; only CSV/en was checked. Also untested: a live `messenger:consume product_export` loop against RabbitMQ.",
+      "[follow_up] Decide whether the PHP_MEMORY_LIMIT=512M ceiling and the total absence of resources.limits/requests on both k8s Deployments still warrant an infra change now that peak is ~121 MB. Sysadmin scope.",
+      "[nice_to_have] Pre-existing `default =>` alignment CS violation in ProductExportService::createWriter() (confirmed unrelated to this diff).",
+      "[nice_to_have] Pre-existing 23-error legacy MUndCTechPageBundle test rot, and the `ORDER BY articleNumber ASC` non-total-order caveat (flagged-not-fixed by design). Own tickets if they start to matter."
+    ]
+  },
+
+  "operator_signoffs_2026_08_04": {
+    "verdict": "PASS_WITH_NOTES",
+    "warning_cap_and_twig_scope": "keep in this ticket",
+    "memory_bar": "accept ~4.6x now; Step 5 tracked as follow-up",
+    "commits": "authorized in-session: 'Please commit on feature branch per step/task.'"
+  },
+
+  "unverified_by_qa": [
+    "Did not re-run the worker's peak-memory probe (auto_prepend_file + memory_get_peak_usage); the §3 numbers (81/97/123/173 MB across 441/938/2245 rows) are taken as-is. This cuts AGAINST the report's favorability, since the worker uses those numbers to concede its goal was unmet rather than to inflate the result.",
+    "Did not exercise a live `messenger:consume product_export` worker against RabbitMQ end-to-end — only the synchronous integration path.",
+    "Did not test the abort guard against a real database/infrastructure outage — boundary unit tests only.",
+    "Did not test XLSX export or locales other than `en`.",
+    "Did not verify anything on the LIVE K8s two-node environment where the original failure occurred — this is the single largest remaining gap and is carried as a blocking post-deploy action item.",
+    "Did not run a dependency vulnerability audit — not requested, composer.lock unmodified, treated as not applicable.",
+    "Could not construct a true independent pre-change baseline to A/B against (the fix is already the branch's committed state); instead reproduced the claimed post-change output exactly, which is strong but not identical evidence."
+  ]
+}

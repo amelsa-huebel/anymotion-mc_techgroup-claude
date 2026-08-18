@@ -1,3 +1,19 @@
 {
-  "outputStyle": "Explanatory"
+  "outputStyle": "Explanatory",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "session=$(python3 -c \"import json,os; print(json.load(open(os.path.join(os.getcwd(),'.claude/bus-config.json')))['session_name'])\" 2>/dev/null); [ -z \"$session\" ] && exit 0; inbox=\"$HOME/.ai-bus/sessions/$session/inbox.d\"; [ -d \"$inbox\" ] || exit 0; count=$(find \"$inbox\" -maxdepth 1 -type f -name '*.json' 2>/dev/null | wc -l); [ \"$count\" -gt 0 ] && echo \"Hub inbox: $count pending message(s) for session '$session'. Invoke /hub-workflow to claim and process.\"; exit 0"
+          },
+          {
+            "type": "command",
+            "command": "session=$(python3 -c \"import json,os; print(json.load(open(os.path.join(os.getcwd(),'.claude/bus-config.json')))['session_name'])\" 2>/dev/null); [ -z \"$session\" ] && exit 0; base=\"$HOME/.ai-bus/sessions/$session\"; aw=$(find \"$base/awaiting\" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l); ow=$(find \"$base/owing\" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l); if [ \"$aw\" -gt 0 ] || [ \"$ow\" -gt 0 ]; then echo \"Reply ledger: you are owed $aw repl(y/ies) and owe $ow. Run /check-inbox to reconcile.\"; python3 \"$HOME/.ai-bus/lib/reply-watch.py\" ensure >/dev/null 2>&1; fi; exit 0"
+          }
+        ]
+      }
+    ]
+  }
 }

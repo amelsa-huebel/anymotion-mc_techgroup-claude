@@ -2,6 +2,22 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Brain (memory) — bind at session start
+
+This project uses the local **brain-mcp** memory server (registered in `.mcp.json`),
+scoped to its own isolated brain **`mc-techgroup`** — project knowledge stays separate
+from the hub (`_hub`) and every other project.
+
+**On every session start, call once:**
+
+```
+brain.hello(project="mc-techgroup", instance_role="worker", brain_id="mc-techgroup", create_if_missing=True)
+```
+
+Thereafter every `brain.remember` / `brain.recall` in the session is scoped to the
+`mc-techgroup` brain — no `_hub` or cross-project noise. Background:
+`~/Sites/my-tools/brain-mcp/docs/multiple-brains.md`.
+
 ## Project Overview
 
 This repo has two layers:
@@ -69,7 +85,9 @@ Templates in `SUPPORT/Docker/Templates/*.yaml` are assembled into `docker-compos
 - `BUILDS_FROM_DOCKERFILE` (containers needing custom Dockerfile builds)
 - Variables like `__PROJECT_NAME__`, `__PHP_IMAGE__` are substituted at generation time
 
-This project uses: `mysql,nginx,php,redis,elastic,kibana,mail,node,supervisor,rabbitmq,minio`
+This project uses (verified 2026-08-18 from `SUPPORT/ProjectConfig/.env` → `USE_CONTAINERS`):
+`mysql,nginx,php,redis,elastic8,kibana,mail,node,supervisor,phpmyadmin,rabbitmq,minio`
+(note `elastic8`, not `elastic`, and `phpmyadmin` is included)
 Custom Dockerfiles: `php` and `supervisor` (in `SUPPORT/Docker/Dockerfiles/php-8.1/`)
 
 ### Configuration Layering
@@ -100,10 +118,10 @@ SUPPORT/ProjectConfig/.env  # Anyman config: images, containers, PHP version, CS
 | Service | Container Name | Notes |
 |---------|---------------|-------|
 | PHP FPM | `pimcore` | Main app container, custom Dockerfile with AMQP |
-| MySQL | `db` | MariaDB 10.5.27, 4 switchable volumes |
+| MySQL | `db` | **`mysql:9.1`** (not MariaDB — verified 2026-08-18), 4 switchable volumes |
 | Nginx | `webserver` | Reverse proxy |
 | Node.js | `nodejs` | Node 20 for Webpack Encore builds |
-| Elasticsearch | `elastic` | v7.17.8 |
+| Elasticsearch | `elastic` | **v8.11.3** (verified 2026-08-18) |
 | Redis | `redis` | Alpine |
 | RabbitMQ | `rabbitmq` | With management plugin |
 | MinIO | `minio` | S3-compatible storage |
@@ -112,9 +130,10 @@ SUPPORT/ProjectConfig/.env  # Anyman config: images, containers, PHP version, CS
 
 ### Stack
 
-- **Pimcore 11.5.x** (installed 11.5.14) on **Symfony 6.4 (LTS)** with **PHP 8.1+** (container image is `php-8.1`)
+- **Pimcore 11.5.x** (installed 11.5.14) on **Symfony 6.4 (LTS)** with **PHP 8.3** — the container image is
+  `pimcore/pimcore:php8.3-latest` and the runtime reports 8.3.31 (verified 2026-08-18; earlier notes saying 8.1 are stale)
 - **Frontend**: Webpack Encore 0.30 + **Vue 2.6** + jQuery 3 + Foundation 6.5 + Sass — `browserslist` still includes `ie >= 11` (the frontend stack was *not* upgraded with the Pimcore 11 move)
-- **Search**: Elasticsearch 7.17.8 via `anymotion/elasticsearch-bundle ^3.1`
+- **Search**: Elasticsearch 8.11.3 via `anymotion/elasticsearch-bundle ^3.1`
 - **PDF**: Pimcore 11 **Web2Print** via **Gotenberg** (`config/packages/pimcore_web_to_print.yaml` → `generalTool: gotenberg`, `gotenbergHostUrl` from `%env(GOTENBERG_HOST)%`). Pimcore 11 removed the bundled PDFreactor. Note: `gotenberg` is **not** in this project's `USE_CONTAINERS`, so it is supplied externally via `GOTENBERG_HOST` (add a `gotenberg` container locally when generating PDFs).
 - **Error tracking**: Sentry (`sentry/sentry-symfony ^5.2`)
 - **Queue**: RabbitMQ via Symfony Messenger
@@ -140,7 +159,20 @@ SUPPORT/ProjectConfig/.env  # Anyman config: images, containers, PHP version, CS
 
 ### Tests
 
-> **Reality check:** `tests/` is currently effectively empty — only `tests/importtest/*.csv` fixtures exist. There is no live PHPUnit or Behat suite. Don't claim "tests pass" — the realistic verification bar in this repo is `any csf` (code style) plus manual smoke-testing.
+> **Reality check (corrected 2026-08-18):** there **is** a working PHPUnit suite, at
+> `tests/phpunit/` with its config at `tests/phpunit/phpunit.xml.dist` (note: **not** at the
+> pimcore root — `-c phpunit.xml.dist` fails). Run it with:
+> `any cmd pimcore php vendor/bin/phpunit -c tests/phpunit/phpunit.xml.dist --testsuite unit`
+> The **unit** suite is green (68 tests / 143 assertions as of 2026-08-18, plus one long-standing
+> risky test in `ProductExportRowBuilderTest`). The **integration** suite does *not* run — it
+> references pre-migration `MUndCTechPageBundle` namespaces and uses `withConsecutive()`, removed in
+> PHPUnit 10 (the vendored version is 12.5.31). `phpunit.xml.dist` also still declares
+> `DB_SERVER_VERSION=10.5.27-MariaDB` while the DB container is `mysql:9.1`.
+>
+> Note `any cs` / `any csf` are **broken** two ways: they request the image tag
+> `cytopia/php-cs-fixer:3-php8.3`, which has no manifest, and they hardcode `--tty`. Until that is
+> fixed upstream, run the already-pulled `:3` tag directly:
+> `docker run -i --rm -v $PWD/PROJECT/pimcore/:/data -v $PWD/SUPPORT/CodeQuality/:/config --user $(id -u):$(id -g) cytopia/php-cs-fixer:3 fix --config=/config/php-cs-fixer.dist.php <paths>`
 
 When a real suite is added, the wiring will look like:
 
@@ -182,7 +214,31 @@ For deeper integration notes (where each bundle is used in the project, common p
 | Anymotion bundle integration                        | `.claude/.human_guidelines/ANYMOTION_BUNDLES.md`           |
 | Search / Elasticsearch                              | `.claude/.human_guidelines/ELASTICSEARCH.md`               |
 | MinIO / S3 / asset streaming                        | `.claude/.human_guidelines/MINIO_S3.md`                    |
-| PDF / Web2Print                                     | `.claude/.human_guidelines/WEB2PRINT.md`                   |
+| PDF / Web2Print (generating PDFs)                   | `.claude/.human_guidelines/WEB2PRINT.md`                   |
+| PDF asset preview (admin preview of existing PDFs) + verification runbook | `.claude/.human_guidelines/PDF_ASSET_PREVIEW.md`     |
 | Specialist agents (Pimcore 11, Symfony, Web2Print…) | `.claude/agents/`                                          |
 | Workflow gates (block `var/classes/` edits, warn on invalid `pimcoreblock` Twig syntax, etc.) | `.claude/hookify.*.local.md` |
 | Project-local memory (`/learnsave`, `/formulate-beliefs`) | `.claude/.memories/`                                  |
+
+---
+
+## Session Start Protocol
+
+When starting a new session, if the environment variable `AI_BUS_SESSION` is set:
+1. Run `/hub-workflow` to check for pending tasks from the hub
+2. This enables hub-orchestrated workflows (planning, implementation, QA)
+
+### Hub orchestration (TheLink + bus)
+
+This session is a hub-controlled **worker** (`session_name: mc-techgroup`, hub: `hub`).
+
+- **Messages / tasks:** the hub dispatches via TheLink tasks AND the bus inbox
+  (`~/.ai-bus/sessions/mc-techgroup/inbox.d/`). Use `/check-inbox` to claim, `/hub-workflow`
+  to run the full dispatch → plan → implement → QA loop.
+- **Status reporting:** follow `/thelink-task-protocol` — post a fenced ```json``` block as the
+  most recent task comment with `status` of `in_progress` | `blocked` | `check_back` |
+  `ready_for_qa` | `completed`, and mirror hub-attention comments onto the bus via `/report-back`.
+- **NEVER set TheLink `status: completed` yourself** and never write to `.claude/qa/verdicts/`
+  — closing a task and issuing verdicts are hub-only actions after `/verify-qa` passes.
+- **Planning:** use `/planning-orchestrator` for plan-first dispatches, `/implementation-orchestrator`
+  for the build phase. Wait for the hub's explicit `proceed-to-implementation` before implementing.
